@@ -65,9 +65,10 @@ impl VideoFeed {
         self.ended = false;
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let _ = self.tx.send(Cmd::Seek(t, self.generation));
-            // Unblock the worker if it's waiting to hand over a stale frame.
+            // Unblock the worker if it's waiting to hand over a stale frame. Drain before the seek is
+            // sent: afterwards the worker may already have published frames of the new generation.
             while self.rx.try_recv().is_ok() {}
+            let _ = self.tx.send(Cmd::Seek(t, self.generation));
         }
         #[cfg(target_arch = "wasm32")]
         self.dec.seek(t);
@@ -176,5 +177,31 @@ fn worker(mut dec: VideoDecoder, cmds: std::sync::mpsc::Receiver<Cmd>, frames: s
         if frames.send((generation, frame)).is_err() {
             return;
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seek_keeps_the_frames_and_end_sent_for_it() {
+        let (tx, cmd_rx) = std::sync::mpsc::channel::<Cmd>();
+        let (frame_tx, rx) = std::sync::mpsc::channel::<(u64, Option<Frame>)>();
+        // A long backlog of stale frames: the worker answers the seek while it is still being drained.
+        for _ in 0..200_000 {
+            let _ = frame_tx.send((0, None));
+        }
+        let worker = std::thread::spawn(move || {
+            if let Ok(Cmd::Seek(t, g)) = cmd_rx.recv() {
+                let _ = frame_tx.send((g, Some(Frame { time: t, width: 1, height: 1, rgba: vec![0; 4] })));
+                let _ = frame_tx.send((g, None));
+            }
+        });
+        let mut feed = VideoFeed { size: (1, 1), current: None, next: None, generation: 0, ended: false, tx, rx };
+        feed.seek(0.5);
+        let _ = worker.join();
+        assert_eq!(feed.frame_at(0.5).map(|f| f.time), Some(0.5));
+        assert!(feed.ended());
     }
 }
