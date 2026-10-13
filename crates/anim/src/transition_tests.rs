@@ -228,3 +228,12 @@ fn hostile_aspects_are_safe() {
     }
     assert!(near(ss(0.5), 0.5, 1e-12));
 }
+
+#[test]
+fn honeycomb_new_cells_reach_the_bottom_of_the_slide() {
+    for aspect in [A, 4.0 / 3.0] {
+        let ls = transition_frame("honeycomb", "", 0.99, aspect);
+        let bottom = of(&ls, Source::New).iter().flat_map(|l| l.quad.iter().map(|p| p[1])).fold(f64::NEG_INFINITY, f64::max);
+        assert!(bottom >= 1.0, "aspect {aspect}: new cells stop at y = {bottom}");
+    }
+}

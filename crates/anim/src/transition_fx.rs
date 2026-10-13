@@ -794,7 +794,7 @@ fn honeycomb(t: f64, a: f64) -> Vec<Layer> {
     let cols = 11usize;
     let w = 1.0 / cols as f64;
     let rh = w * a * 0.5;
-    let rows = (1.0 / (rh * 1.5)).ceil() as usize + 2;
+    let rows = (1.0 / (rh * 0.866)).ceil() as usize + 2;
     let mut v = vec![Layer::full(Black, 1.0)];
     let seam = ss(win(t, 0.0, 0.12)) * (1.0 - ss(win(t, 0.85, 1.0)));
     let hex = |cx: f64, cy: f64, s: f64| -> Vec<[f64; 2]> {
