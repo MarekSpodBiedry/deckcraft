@@ -44,6 +44,8 @@ pub fn instance_id() -> u64 {
     *ID.get_or_init(|| {
         use std::hash::{BuildHasher, Hasher};
         let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        // wasm32-unknown-unknown has no pids: std::process::id() panics there.
+        #[cfg(not(target_arch = "wasm32"))]
         h.write_u32(std::process::id());
         #[cfg(not(target_arch = "wasm32"))]
         if let Ok(d) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
@@ -240,6 +242,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("deckcraft-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn instance_id_is_stable_nonzero_and_leaves_the_uid_counter_bits_clear() {
+        let id = instance_id();
+        assert_eq!(id, instance_id());
+        assert!(id >= 1 << 24);
+        assert_eq!(id & 0xFF_FFFF, 0);
+        assert_eq!(id & !UID_MASK, 0);
     }
 
     #[test]
